@@ -33,6 +33,20 @@ export async function registerWebhookRoutes(app: FastifyInstance, config: AppCon
   app.post("/notion-webhook", { config: { rawBody: true } }, async (request, reply) => {
     const payload = notionWebhookSchema.parse(request.body);
 
+    if (config.webhookDebugLogBody) {
+      request.log.info(
+        {
+          headers: {
+            "content-type": request.headers["content-type"],
+            "user-agent": request.headers["user-agent"],
+            "x-notion-signature": request.headers["x-notion-signature"]
+          },
+          body: request.body
+        },
+        "Notion webhook debug payload"
+      );
+    }
+
     if (payload.verification_token) {
       request.log.info({ verificationToken: payload.verification_token }, "Notion webhook verification token received");
       return { status: "verification_received" };

@@ -16,6 +16,7 @@ export interface AppConfig {
   statusProperty: string;
   successStatus: string;
   errorStatus: string;
+  webhookDebugLogBody: boolean;
 }
 
 function env(name: string, fallback = ""): string {
@@ -40,7 +41,8 @@ export function loadConfig(): AppConfig {
     pdfProperty: env("NOTION_PDF_PROPERTY", "PDF generado"),
     statusProperty: env("NOTION_STATUS_PROPERTY", "Estado"),
     successStatus: env("NOTION_SUCCESS_STATUS", "PDF generado"),
-    errorStatus: env("NOTION_ERROR_STATUS", "Error PDF")
+    errorStatus: env("NOTION_ERROR_STATUS", "Error PDF"),
+    webhookDebugLogBody: env("WEBHOOK_DEBUG_LOG_BODY").toLowerCase() === "true"
   };
 }
 
