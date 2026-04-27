@@ -22,6 +22,13 @@ const notionWebhookSchema = z.object({
       type: z.string()
     })
     .optional(),
+  data: z
+    .object({
+      id: z.string().min(1),
+      object: z.string()
+    })
+    .passthrough()
+    .optional(),
   page_id: z.string().min(1).optional(),
   pageId: z.string().min(1).optional()
 });
@@ -55,7 +62,11 @@ export async function registerWebhookRoutes(app: FastifyInstance, config: AppCon
     verifyNotionSignature(request, config);
 
     const pageId =
-      payload.entity?.type === "page" ? payload.entity.id : payload.page_id ?? payload.pageId;
+      payload.entity?.type === "page"
+        ? payload.entity.id
+        : payload.data?.object === "page"
+          ? payload.data.id
+          : payload.page_id ?? payload.pageId;
 
     if (!pageId) {
       return reply.code(202).send({ status: "ignored", reason: "event_has_no_page_id" });
