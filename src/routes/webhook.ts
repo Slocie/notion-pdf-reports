@@ -49,18 +49,9 @@ export async function registerWebhookRoutes(app: FastifyInstance, config: AppCon
       return reply.code(200).send({ status: "ignored", reason: "event_has_no_page_id" });
     }
 
-    const report = await notion.buildReportFromPage(pageId);
-    if (report.metadata.status !== config.triggerStatus) {
-      return reply.code(200).send({
-        status: "ignored",
-        reason: "trigger_status_not_set",
-        pageId,
-        currentStatus: report.metadata.status,
-        expectedStatus: config.triggerStatus
-      });
-    }
+    void processNotionWebhookPdf({ pageId, notion, pdf, config, request });
 
-    return generatePdf({ pageId, notion, pdf, config, request, reply });
+    return reply.code(202).send({ status: "accepted", pageId });
   });
 
   app.post("/generate-pdf", async (request, reply) => {
@@ -94,7 +85,7 @@ function extractPageId(payload: Record<string, unknown>): string {
     payload["Page ID"],
     payload["Page id"],
     payload["page id"],
-    payload["Página ID"],
+    payload["PÃ¡gina ID"],
     payload["Pagina ID"]
   );
   if (direct) return normalizePageId(direct);
@@ -162,19 +153,12 @@ async function generatePdf(input: {
   const { pageId, notion, pdf, config, request, reply } = input;
 
   try {
-    const report = await notion.buildReportFromPage(pageId);
-    const indexHtml = await pdf.renderHtml(report.content.html);
-    const pdfBuffer = await pdf.htmlToPdf(indexHtml);
-    const filename = buildPdfFilename(report.metadata.title, report.metadata.date);
-    const fileUploadId = await notion.uploadPdfAndAttach(pageId, filename, pdfBuffer);
-    await notion.markStatus(pageId, config.successStatus);
+    const result = await generatePdfForPage({ pageId, notion, pdf, config });
 
     return {
       status: "ok",
       pageId,
-      filename,
-      fileUploadId,
-      pdfBytes: pdfBuffer.length
+      ...result
     };
   } catch (error) {
     await notion.markStatus(pageId, config.errorStatus).catch(() => undefined);
@@ -184,6 +168,59 @@ async function generatePdf(input: {
       message: error instanceof Error ? error.message : "Unknown error"
     });
   }
+}
+
+async function processNotionWebhookPdf(input: {
+  pageId: string;
+  notion: NotionService;
+  pdf: PdfService;
+  config: AppConfig;
+  request: FastifyRequest;
+}): Promise<void> {
+  const { pageId, notion, pdf, config, request } = input;
+
+  try {
+    const report = await notion.buildReportFromPage(pageId);
+    if (report.metadata.status !== config.triggerStatus) {
+      request.log.info(
+        {
+          pageId,
+          currentStatus: report.metadata.status,
+          expectedStatus: config.triggerStatus
+        },
+        "Notion webhook ignored because trigger status is not set"
+      );
+      return;
+    }
+
+    const result = await generatePdfForPage({ pageId, notion, pdf, config, report });
+    request.log.info({ pageId, ...result }, "PDF generated from Notion webhook");
+  } catch (error) {
+    await notion.markStatus(pageId, config.errorStatus).catch(() => undefined);
+    request.log.error({ pageId, error }, "PDF generation from Notion webhook failed");
+  }
+}
+
+async function generatePdfForPage(input: {
+  pageId: string;
+  notion: NotionService;
+  pdf: PdfService;
+  config: AppConfig;
+  report?: Awaited<ReturnType<NotionService["buildReportFromPage"]>>;
+}): Promise<Omit<GeneratePdfResult, "status" | "pageId">> {
+  const { pageId, notion, pdf, config } = input;
+  const report = input.report ?? (await notion.buildReportFromPage(pageId));
+  const indexHtml = await pdf.renderHtml(report.content.html);
+  const pdfBuffer = await pdf.htmlToPdf(indexHtml);
+  const filename = buildPdfFilename(report.metadata.title, report.metadata.date);
+  const fileUploadId = await notion.uploadPdfAndAttach(pageId, filename, pdfBuffer);
+  await notion.markStatus(pageId, config.successStatus);
+
+  return {
+    filename,
+    fileUploadId,
+    pdfBytes: pdfBuffer.length
+  };
 }
 
 function verifyN8nToken(request: FastifyRequest, config: AppConfig): void {
