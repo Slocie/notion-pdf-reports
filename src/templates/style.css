@@ -1,0 +1,147 @@
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: #1f2933;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11pt;
+  line-height: 1.55;
+  margin: 0;
+}
+
+header {
+  align-items: center;
+  border-bottom: 1px solid #d7dee8;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+}
+
+.logo {
+  max-height: 58px;
+  max-width: 190px;
+  object-fit: contain;
+}
+
+.brand {
+  color: #52606d;
+  text-align: right;
+}
+
+.company {
+  color: #102a43;
+  font-size: 13pt;
+  font-weight: 700;
+}
+
+.clinician {
+  font-size: 9.5pt;
+}
+
+h1 {
+  color: #102a43;
+  font-size: 20pt;
+  line-height: 1.2;
+  margin: 0 0 14px;
+}
+
+h2,
+h3,
+h4 {
+  color: #102a43;
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: 14pt;
+  margin: 24px 0 8px;
+}
+
+h3 {
+  font-size: 12.5pt;
+  margin: 18px 0 6px;
+}
+
+h4 {
+  font-size: 11.5pt;
+  margin: 16px 0 6px;
+}
+
+p {
+  margin: 0 0 10px;
+}
+
+ul,
+ol {
+  margin: 0 0 10px 20px;
+  padding: 0;
+}
+
+li {
+  margin-bottom: 5px;
+}
+
+.meta {
+  border: 1px solid #d7dee8;
+  display: grid;
+  grid-template-columns: 34mm 1fr;
+  margin-bottom: 22px;
+}
+
+.meta div {
+  border-bottom: 1px solid #e6ebf1;
+  padding: 6px 8px;
+}
+
+.meta div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.label {
+  background: #f5f7fa;
+  color: #52606d;
+  font-weight: 700;
+}
+
+blockquote,
+aside {
+  border-left: 3px solid #9fb3c8;
+  color: #334e68;
+  margin: 14px 0;
+  padding: 8px 12px;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d7dee8;
+  margin: 18px 0;
+}
+
+pre {
+  background: #f5f7fa;
+  border: 1px solid #d7dee8;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+a {
+  color: #0b69a3;
+}
+
+footer {
+  border-top: 1px solid #d7dee8;
+  color: #627d98;
+  display: flex;
+  font-size: 8.5pt;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 10px;
+}

@@ -1,0 +1,28 @@
+{
+  "name": "notion-patient-pdf-automator",
+  "version": "1.0.0",
+  "description": "Fastify service that generates patient report PDFs from Notion data through Gotenberg.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/src/server.js",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@notionhq/client": "^2.3.0",
+    "fastify": "^5.2.1",
+    "fastify-raw-body": "^5.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

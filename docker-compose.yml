@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    environment:
+      NOTION_API_KEY: ${NOTION_API_KEY}
+      GOTENBERG_ENDPOINT: http://gotenberg:3000
+      API_SECRET_TOKEN: ${API_SECRET_TOKEN}
+      COMPANY_LOGO_URL: ${COMPANY_LOGO_URL}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gotenberg
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=false
+    ports:
+      - "3001:3000"
