@@ -13,32 +13,12 @@ const generatePdfSchema = z.object({
   pageId: z.string().min(1).optional()
 });
 
-const notionWebhookSchema = z.object({
-  verification_token: z.string().min(1).optional(),
-  type: z.string().optional(),
-  entity: z
-    .object({
-      id: z.string().min(1),
-      type: z.string()
-    })
-    .optional(),
-  data: z
-    .object({
-      id: z.string().min(1),
-      object: z.string()
-    })
-    .passthrough()
-    .optional(),
-  page_id: z.string().min(1).optional(),
-  pageId: z.string().min(1).optional()
-});
-
 export async function registerWebhookRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
   const notion = new NotionService(config);
   const pdf = new PdfService(config);
 
   app.post("/notion-webhook", { config: { rawBody: true } }, async (request, reply) => {
-    const payload = notionWebhookSchema.parse(request.body);
+    const payload = asRecord(request.body);
 
     if (config.webhookDebugLogBody) {
       request.log.info(
@@ -48,33 +28,30 @@ export async function registerWebhookRoutes(app: FastifyInstance, config: AppCon
             "user-agent": request.headers["user-agent"],
             "x-notion-signature": request.headers["x-notion-signature"]
           },
-          body: request.body
+          bodyKeys: Object.keys(payload),
+          pageId: extractPageId(payload)
         },
         "Notion webhook debug payload"
       );
     }
 
-    if (payload.verification_token) {
+    if (typeof payload.verification_token === "string" && payload.verification_token) {
       request.log.info({ verificationToken: payload.verification_token }, "Notion webhook verification token received");
       return { status: "verification_received" };
     }
 
     verifyNotionSignature(request, config);
 
-    const pageId =
-      payload.entity?.type === "page"
-        ? payload.entity.id
-        : payload.data?.object === "page"
-          ? payload.data.id
-          : payload.page_id ?? payload.pageId;
+    const pageId = extractPageId(payload);
 
     if (!pageId) {
-      return reply.code(202).send({ status: "ignored", reason: "event_has_no_page_id" });
+      request.log.warn({ bodyKeys: Object.keys(payload) }, "Notion webhook ignored because no page id was found");
+      return reply.code(200).send({ status: "ignored", reason: "event_has_no_page_id" });
     }
 
     const report = await notion.buildReportFromPage(pageId);
     if (report.metadata.status !== config.triggerStatus) {
-      return reply.code(202).send({
+      return reply.code(200).send({
         status: "ignored",
         reason: "trigger_status_not_set",
         pageId,
@@ -97,6 +74,81 @@ export async function registerWebhookRoutes(app: FastifyInstance, config: AppCon
 
     return generatePdf({ pageId, notion, pdf, config, request, reply });
   });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function extractPageId(payload: Record<string, unknown>): string {
+  const entity = asRecord(payload.entity);
+  if (entity.type === "page" && typeof entity.id === "string") return entity.id;
+
+  const data = asRecord(payload.data);
+  if (data.object === "page" && typeof data.id === "string") return data.id;
+
+  const direct = firstString(
+    payload.page_id,
+    payload.pageId,
+    payload.id,
+    payload["Page ID"],
+    payload["Page id"],
+    payload["page id"],
+    payload["Página ID"],
+    payload["Pagina ID"]
+  );
+  if (direct) return normalizePageId(direct);
+
+  const found = findPageIdDeep(payload);
+  return found ? normalizePageId(found) : "";
+}
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    const text = stringFromUnknown(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function findPageIdDeep(value: unknown, depth = 0): string {
+  if (depth > 5) return "";
+
+  const text = stringFromUnknown(value);
+  const match = text.match(/[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}/i);
+  if (match) return match[0];
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findPageIdDeep(item, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      const found = findPageIdDeep(item, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  return "";
+}
+
+function stringFromUnknown(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return firstString(record.id, record.pageId, record.page_id, record.url, record.plain_text, record.content);
+  }
+
+  return "";
+}
+
+function normalizePageId(value: string): string {
+  return value.trim().replaceAll("-", "");
 }
 
 async function generatePdf(input: {
