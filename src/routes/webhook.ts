@@ -113,7 +113,7 @@ async function generatePdf(input: {
     const report = await notion.buildReportFromPage(pageId);
     const indexHtml = await pdf.renderHtml(report.content.html);
     const pdfBuffer = await pdf.htmlToPdf(indexHtml);
-    const filename = `${safeFilename(report.metadata.title)}-${safeFilename(report.metadata.date)}.pdf`;
+    const filename = buildPdfFilename(report.metadata.title, report.metadata.date);
     const fileUploadId = await notion.uploadPdfAndAttach(pageId, filename, pdfBuffer);
     await notion.markStatus(pageId, config.successStatus);
 
@@ -171,6 +171,14 @@ function safeFilename(value: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 120) || "informe";
+    .replace(/^-+|-+$/g, "") || "informe";
+}
+
+function buildPdfFilename(title: string, date: string): string {
+  const safeTitle = safeFilename(title);
+  const safeDate = safeFilename(date);
+  const suffix = `-${safeDate}.pdf`;
+  const maxTitleLength = Math.max(1, 100 - suffix.length);
+
+  return `${safeTitle.slice(0, maxTitleLength).replace(/-+$/g, "")}${suffix}`;
 }

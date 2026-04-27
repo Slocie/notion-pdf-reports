@@ -12,6 +12,10 @@ export interface AppConfig {
   companyLogoUrl: string;
   companyName: string;
   clinicianName: string;
+  headerWebsite: string;
+  headerEmail: string;
+  signatureImageUrl: string;
+  signatureLabel: string;
   pdfProperty: string;
   statusProperty: string;
   successStatus: string;
@@ -38,6 +42,10 @@ export function loadConfig(): AppConfig {
     companyLogoUrl: env("COMPANY_LOGO_URL"),
     companyName: env("COMPANY_NAME", "Consulta clinica"),
     clinicianName: env("CLINICIAN_NAME"),
+    headerWebsite: env("HEADER_WEBSITE", "divergentbrain.org"),
+    headerEmail: env("HEADER_EMAIL", "info@divergentbrain.org"),
+    signatureImageUrl: env("SIGNATURE_IMAGE_URL"),
+    signatureLabel: env("SIGNATURE_LABEL", "Firma"),
     pdfProperty: env("NOTION_PDF_PROPERTY", "PDF generado"),
     statusProperty: env("NOTION_STATUS_PROPERTY", "Estado"),
     successStatus: env("NOTION_SUCCESS_STATUS", "PDF generado"),

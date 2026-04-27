@@ -24,7 +24,7 @@ export class NotionService {
   async buildReportFromPage(pageId: string): Promise<MedicalReport> {
     const page = await this.getPage(pageId);
     const properties = page.properties as Record<string, AnyProperty>;
-    const blocks = await this.getAllBlockChildren(pageId);
+    const blocksHtml = await this.renderBlocksHtml(pageId);
 
     const title =
       this.firstNonEmptyProperty(properties, ["Informe", "Nombre", "Title", "Name"]) || "Informe medico";
@@ -42,7 +42,7 @@ export class NotionService {
         patient: { name: patient }
       },
       content: {
-        html: this.renderReportHtml({ title, patient, date, status, blocks })
+        html: blocksHtml || "<p>Sin contenido clinico en la pagina de Notion.</p>"
       }
     };
   }
@@ -96,6 +96,17 @@ export class NotionService {
     } while (startCursor);
 
     return blocks;
+  }
+
+  private async renderBlocksHtml(blockId: string): Promise<string> {
+    const blocks = await this.getAllBlockChildren(blockId);
+    const html: string[] = [];
+
+    for (const block of blocks) {
+      html.push(await this.blockToHtml(block));
+    }
+
+    return html.filter(Boolean).join("\n");
   }
 
   private async createFileUpload(filename: string, contentLength: number): Promise<{ id: string; uploadUrl: string }> {
@@ -179,56 +190,80 @@ export class NotionService {
     return response;
   }
 
-  private renderReportHtml(input: {
-    title: string;
-    patient: string;
-    date: string;
-    status: string;
-    blocks: Array<BlockObjectResponse | PartialBlockObjectResponse | PartialPageObjectResponse>;
-  }): string {
-    const blocksHtml = input.blocks.map((block) => this.blockToHtml(block)).join("\n");
-
-    return `
-      <h1>${escapeHtml(input.title)}</h1>
-      <section class="meta">
-        <div class="label">Paciente</div><div>${escapeHtml(input.patient)}</div>
-        <div class="label">Fecha</div><div>${escapeHtml(input.date)}</div>
-        <div class="label">Estado</div><div>${escapeHtml(input.status)}</div>
-      </section>
-      <article>${blocksHtml || "<p>Sin contenido clinico en la pagina de Notion.</p>"}</article>
-    `;
-  }
-
-  private blockToHtml(block: BlockObjectResponse | PartialBlockObjectResponse | PartialPageObjectResponse): string {
+  private async blockToHtml(block: BlockObjectResponse | PartialBlockObjectResponse | PartialPageObjectResponse): Promise<string> {
     if (!("type" in block)) return "";
 
     const value = block[block.type as keyof typeof block] as Record<string, unknown> | undefined;
     const richText = Array.isArray(value?.rich_text) ? richTextToHtml(value.rich_text as RichTextItem[]) : "";
+    const id = typeof block.id === "string" ? block.id : "";
+    const childHtml = "has_children" in block && block.has_children && id ? await this.renderBlocksHtml(id) : "";
 
     switch (block.type) {
       case "paragraph":
-        return richText ? `<p>${richText}</p>` : "";
+        return [richText ? `<p>${richText}</p>` : "", childHtml].filter(Boolean).join("\n");
       case "heading_1":
-        return `<h2>${richText}</h2>`;
+        return [`<h2>${richText}</h2>`, childHtml].filter(Boolean).join("\n");
       case "heading_2":
-        return `<h3>${richText}</h3>`;
+        return [`<h3>${richText}</h3>`, childHtml].filter(Boolean).join("\n");
       case "heading_3":
-        return `<h4>${richText}</h4>`;
+        return [`<h4>${richText}</h4>`, childHtml].filter(Boolean).join("\n");
       case "bulleted_list_item":
-        return `<ul><li>${richText}</li></ul>`;
+        return `<ul><li>${richText}${childHtml}</li></ul>`;
       case "numbered_list_item":
-        return `<ol><li>${richText}</li></ol>`;
+        return `<ol><li>${richText}${childHtml}</li></ol>`;
       case "quote":
-        return `<blockquote>${richText}</blockquote>`;
+        return `<blockquote>${richText}${childHtml}</blockquote>`;
       case "callout":
-        return `<aside>${richText}</aside>`;
+        return `<aside>${richText}${childHtml}</aside>`;
       case "divider":
         return "<hr>";
       case "code":
         return `<pre><code>${escapeHtml(this.propertyText(value as AnyProperty))}</code></pre>`;
-      default:
+      case "to_do":
+        return `<p>${(value as { checked?: boolean })?.checked ? "[x]" : "[ ]"} ${richText}</p>${childHtml}`;
+      case "table":
+        return id ? await this.tableToHtml(block, value) : "";
+      case "table_row":
         return "";
+      case "column_list":
+      case "column":
+      case "toggle":
+        return childHtml;
+      default:
+        return childHtml;
     }
+  }
+
+  private async tableToHtml(
+    block: BlockObjectResponse | PartialBlockObjectResponse | PartialPageObjectResponse,
+    table?: Record<string, unknown>
+  ): Promise<string> {
+    const id = typeof block.id === "string" ? block.id : "";
+    if (!id) return "";
+
+    const rows = await this.getAllBlockChildren(id);
+    const hasColumnHeader = Boolean((table as { has_column_header?: boolean } | undefined)?.has_column_header);
+    const body = rows
+      .filter((row) => "type" in row && row.type === "table_row")
+      .map((row, index) => this.tableRowToHtml(row, hasColumnHeader && index === 0))
+      .join("\n");
+
+    return body ? `<table>${body}</table>` : "";
+  }
+
+  private tableRowToHtml(
+    row: BlockObjectResponse | PartialBlockObjectResponse,
+    header: boolean
+  ): string {
+    if (!("type" in row) || row.type !== "table_row") return "";
+
+    const tableRow = row.table_row as { cells?: RichTextItem[][] };
+    const tag = header ? "th" : "td";
+    const cells = (tableRow.cells ?? [])
+      .map((cell) => `<${tag}>${richTextToHtml(cell)}</${tag}>`)
+      .join("");
+
+    return `<tr>${cells}</tr>`;
   }
 
   private firstNonEmptyProperty(properties: Record<string, AnyProperty>, names: string[]): string {
